@@ -4,9 +4,9 @@
 scp_options=(-o StrictHostKeyChecking=no -o NumberOfPasswordPrompts=1 -o ConnectTimeout=30 -o "UserKnownHostsFile /dev/null")
 user='ubuntu'
 local_script="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/scripts/openvpn-autoinstall.sh"
-remote_script="\$HOME/openvpn-autoinstall.sh"
+remote_script="/home/ubuntu/openvpn-autoinstall.sh"
 run_script="sudo bash ./openvpn-autoinstall.sh"
-remote_path="\$HOME/aws_vpn.ovpn"
+remote_path="/home/ubuntu/aws_vpn.ovpn"
 export BOTO_USE_ENDPOINT_HEURISTICS=true
 
 #Terminal colors
@@ -72,7 +72,7 @@ backup ()
 cp ./scripts/$1{,.bak}
 }
 
-#check if file exists before modifications 
+#check if file exists before modifications
 filecheck ()
 {
   if [[ -f ./scripts/$1.bak ]]; then

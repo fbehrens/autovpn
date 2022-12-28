@@ -1,0 +1,24 @@
+version: '3.3'
+services:
+  ovpn:
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - /Users/fb/Movies/transmission1/:/data
+      - /Users/fb/Documents/Github/autovpn/us-east-1_aws_vpn.ovpn:/etc/openvpn/custom/default.ovpn
+    environment:
+      - OPENVPN_PROVIDER=CUSTOM
+      - OPENVPN_USERNAME=user
+      - OPENVPN_PASSWORD=pass
+      - LOCAL_NETWORK=192.168.0.0/16
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+    ports:
+      - '9091:9091'
+    image: haugene/transmission-openvpn
+    # image: busybox:latest
+    # stdin_open: true # docker run -i
+    # tty: true # docker run -
+    # entrypoint: /bin/sh

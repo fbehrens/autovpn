@@ -136,6 +136,7 @@ while getopts ":CDGSTyk:a:d:hmr:i:p:t:u:z:" opt; do
       elif [ "$OPTARG" == "eu-west-3" ]; then region="eu-west-3"; ami="ami-0df03c7641cf41947"
       elif [ "$OPTARG" == "eu-central-1" ]; then region="eu-central-1"; ami="ami-040a1551f9c9d11ad"
       elif [ "$OPTARG" == "eu-north-1" ]; then region="eu-north-1"; ami="ami-0567220a328fe4fee"
+      elif [ "$OPTARG" == "eu-south-2" ]; then region="eu-south-2"; ami="ami-024d7d39761644a9d"
       elif [ "$OPTARG" == "ap-northeast-1" ]; then region="ap-northeast-1"; ami="ami-0d5db3e2a1b98ca94"
       elif [ "$OPTARG" == "ap-northeast-2" ]; then region="ap-northeast-2"; ami="ami-0f4362c71ffaf7759"
       elif [ "$OPTARG" == "ap-northeast-3" ]; then region="ap-northeast-3"; ami="ami-07672d9af3947230d"

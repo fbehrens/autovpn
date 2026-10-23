@@ -5,7 +5,8 @@ Spin up an on-demand OpenVPN endpoint on EC2 (~1 min) and run Transmission throu
 ## Requirements
 
 * [uv](https://docs.astral.sh/uv/) (`brew install uv`) – dependencies (boto3) are installed automatically
-* Docker Desktop
+* [OrbStack](https://orbstack.dev) (`brew install orbstack`, then `open -a OrbStack`) – lightweight
+  Docker runtime; Docker Desktop or Colima work too
 * `~/.aws/credentials` with an IAM user that has EC2 permissions:
 
 ```
@@ -13,6 +14,43 @@ Spin up an on-demand OpenVPN endpoint on EC2 (~1 min) and run Transmission throu
 aws_access_key_id = ...
 aws_secret_access_key = ...
 ```
+
+## How to use
+
+A typical download session:
+
+1. **Start the VPN endpoint** (pick any region; the exit IP will be from there):
+
+   ```fish
+   ./autovpn -C -r eu-north-1
+   ```
+
+2. **Start Transmission** – it connects through the endpoint from step 1:
+
+   ```fish
+   docker compose up -d
+   ```
+
+3. **Check that traffic leaves via EC2** – this must print the EC2 IP, not your home IP:
+
+   ```fish
+   docker compose exec transmission curl -s ifconfig.me
+   ```
+
+4. **Download** – open <http://localhost:9091>, add a `.torrent` file or magnet link.
+   Finished files land in `~/Movies/transmission1`.
+
+5. **Clean up** – EC2 bills per hour, so terminate when done:
+
+   ```fish
+   docker compose down
+   ./autovpn -T -r eu-north-1 -z all
+   ```
+
+Each `-C` creates a fresh endpoint and overwrites `custom/default.ovpn`; after switching
+endpoints run `docker compose restart`, then repeat step 3.
+
+Credentials and `*.pem` files are secrets: never commit them (see [Moving to another Mac](#moving-to-another-mac)).
 
 ## Usage
 
@@ -51,5 +89,5 @@ docker compose exec transmission curl -s ifconfig.me
 
 ## Moving to another Mac
 
-Copy `~/.aws/credentials` and the `*.pem` files (gitignored), or just let `-C` create new keys
+Install `uv` and OrbStack (see [Requirements](#requirements)), clone the repo, then copy `~/.aws/credentials` and the `*.pem` files (gitignored), or just let `-C` create new keys
 (delete a key whose `.pem` is lost with `./autovpn -D -r <region> -k <region>_vpnkey`).

@@ -1,23 +1,44 @@
 # Transmission tunneled through the autovpn endpoint.
 #   docker compose up -d     -> http://localhost:9091
+# Downloads go to /Volumes/T7/transmission (T7 must be mounted).
 # Override download dir with DOWNLOAD_DIR=/path (or put it in .env)
 services:
+  check-download-dir:   # refuse to start if T7 is not mounted (else docker writes to the boot disk)
+    image: busybox
+    volumes:
+      - /Volumes:/Volumes:ro
+    environment:
+      - DOWNLOAD_DIR=${DOWNLOAD_DIR:-}
+    command:
+      - sh
+      - -c
+      - |
+        [ -n "$$DOWNLOAD_DIR" ] || [ -d /Volumes/T7 ] || {
+          echo "ERROR: drive /Volumes/T7 is not mounted."
+          echo "Mount it, or use another download folder:"
+          echo "  DOWNLOAD_DIR=~/Movies/transmission1 docker compose up -d"
+          exit 1
+        }
+
   transmission:
     image: haugene/transmission-openvpn:latest
+    depends_on:
+      check-download-dir:
+        condition: service_completed_successfully
     cap_add:
       - NET_ADMIN
     volumes:
-      - ${DOWNLOAD_DIR:-${HOME}/Movies/transmission1}:/data
+      - ${DOWNLOAD_DIR:-/Volumes/T7/transmission}:/data
       - ./custom:/etc/openvpn/custom   # autovpn -C writes custom/default.ovpn
     environment:
       - OPENVPN_PROVIDER=custom
       - OPENVPN_CONFIG=default
       - OPENVPN_USERNAME=user
       - OPENVPN_PASSWORD=pass
-      - LOCAL_NETWORK=192.168.0.0/16
+      - LOCAL_NETWORK=192.168.0.0/16,100.64.0.0/10   # LAN + tailnet
     logging:
       driver: json-file
       options:
         max-size: 10m
     ports:
-      - '9091:9091'
+      - '127.0.0.1:9091:9091'   # tailnet: tailscale serve --https=9091

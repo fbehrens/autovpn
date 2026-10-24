@@ -38,7 +38,10 @@ A typical download session:
    ```
 
 4. **Download** – open <http://localhost:9091>, add a `.torrent` file or magnet link.
-   Finished files land in `~/Movies/transmission1`.
+   Finished files land in `/Volumes/T7/transmission/completed`.
+
+   The port is bound to localhost only; to reach it from the tailnet:
+   `tailscale serve --bg --https=9091 http://127.0.0.1:9091`
 
 5. **Clean up** – EC2 bills per hour, so terminate when done:
 
@@ -63,7 +66,9 @@ docker compose down
 ```
 
 `-C` writes `<region>_aws_vpn.ovpn` and `custom/default.ovpn` (used by docker compose).
-Downloads go to `~/Movies/transmission1`; override with `DOWNLOAD_DIR=/path docker compose up -d`.
+Downloads go to `/Volumes/T7/transmission`; startup aborts if T7 is not mounted.
+Override with `DOWNLOAD_DIR=/path docker compose up -d`.
+OrbStack needs *Removable Volumes* access (System Settings → Privacy & Security → Files & Folders).
 
 Verify the container uses the EC2 IP:
 

@@ -1,0 +1,17 @@
+# Run the stack WITHOUT the EC2 VPN: traffic leaves via your home IP.
+#   docker compose -f docker-compose.yml -f novpn.yml up -d
+# or make it the default:  echo COMPOSE_FILE=docker-compose.yml:novpn.yml >> .env
+# Replaces gluetun with a plain container that only holds the shared network
+# namespace and the ports, so the other services stay unchanged.
+services:
+  gluetun:
+    image: busybox
+    command: [sleep, infinity]
+    init: true
+    cap_add: !reset []
+    devices: !reset []
+    volumes: !reset []
+    environment: !reset []
+    healthcheck:
+      test: [CMD, 'true']
+      interval: 5s

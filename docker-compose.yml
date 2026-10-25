@@ -6,6 +6,7 @@
 # Override download dir with DOWNLOAD_DIR=/path (or put it in .env)
 # Optional profiles:
 #   docker compose --profile bitmagnet up -d    + bitmagnet DHT crawler/index http://localhost:3333
+# Without the EC2 VPN (home IP!): docker compose -f docker-compose.yml -f novpn.yml up -d
 services:
   check-download-dir:   # refuse to start if T7 is not mounted (else docker writes to the boot disk)
     image: busybox

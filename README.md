@@ -1,6 +1,7 @@
 # autovpn
 
-Spin up an on-demand OpenVPN endpoint on EC2 (~1 min) and run a torrent stack through it in Docker:
+Spin up an on-demand OpenVPN endpoint on EC2 (~1 min) and run a torrent stack through it in Docker
+(the VPN is [optional](#without-the-ec2-vpn-optional)):
 
 * **gluetun** – VPN client + firewall kill switch; all other containers share its network,
   so nothing (downloads, searches, DNS) can leave except through the EC2 tunnel
@@ -117,6 +118,19 @@ The URLs are `https://<host>.<tailnet>.ts.net:<port>`. On wien:
 * qBittorrent: <https://wien.kite-ling.ts.net:8080>
 
 This needs MagicDNS and HTTPS certificates enabled in the Tailscale admin console (*DNS* page).
+
+### Without the EC2 VPN (optional)
+
+`novpn.yml` replaces gluetun with a plain container, so the stack runs without EC2 and
+**all traffic, including torrents, uses your home IP**:
+
+```fish
+docker compose -f docker-compose.yml -f novpn.yml up -d
+```
+
+Every later `docker compose` command needs the same `-f` flags. To make it the default, put
+`COMPOSE_FILE=docker-compose.yml:novpn.yml` in `.env` (gitignored); delete that line to go back to the VPN.
+Switching modes needs `docker compose up -d --force-recreate`.
 
 ### bitmagnet (optional)
 

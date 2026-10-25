@@ -1,7 +1,12 @@
-# Transmission tunneled through the autovpn endpoint.
-#   docker compose up -d     -> http://localhost:9091
-# Downloads go to /Volumes/T7/transmission (T7 must be mounted).
+# Torrent stack tunneled through the autovpn endpoint.
+#   docker compose up -d     -> qBittorrent http://localhost:8080, Prowlarr http://localhost:9696
+# gluetun owns the VPN + firewall kill switch; every other service shares its network
+# (network_mode: service:gluetun), so all traffic, including searches, leaves via EC2.
+# Downloads go to /Volumes/T7/qbittorrent (T7 must be mounted).
 # Override download dir with DOWNLOAD_DIR=/path (or put it in .env)
+# Optional profiles:
+#   docker compose --profile cloudflare up -d   + FlareSolverr (for indexers behind Cloudflare)
+#   docker compose --profile bitmagnet up -d    + bitmagnet DHT crawler/index http://localhost:3333
 services:
   check-download-dir:   # refuse to start if T7 is not mounted (else docker writes to the boot disk)
     image: busybox
@@ -16,29 +21,104 @@ services:
         [ -n "$$DOWNLOAD_DIR" ] || [ -d /Volumes/T7 ] || {
           echo "ERROR: drive /Volumes/T7 is not mounted."
           echo "Mount it, or use another download folder:"
-          echo "  DOWNLOAD_DIR=~/Movies/transmission1 docker compose up -d"
+          echo "  DOWNLOAD_DIR=~/Movies/qbittorrent docker compose up -d"
           exit 1
         }
 
-  transmission:
-    image: haugene/transmission-openvpn:latest
-    depends_on:
-      check-download-dir:
-        condition: service_completed_successfully
+  gluetun:
+    image: qmcgaw/gluetun:latest
     cap_add:
       - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
     volumes:
-      - ${DOWNLOAD_DIR:-/Volumes/T7/transmission}:/data
-      - ./custom:/etc/openvpn/custom   # autovpn -C writes custom/default.ovpn
+      - ./custom:/gluetun/custom:ro   # autovpn -C writes custom/default.ovpn
     environment:
-      - OPENVPN_PROVIDER=custom
-      - OPENVPN_CONFIG=default
-      - OPENVPN_USERNAME=user
-      - OPENVPN_PASSWORD=pass
-      - LOCAL_NETWORK=192.168.0.0/16,100.64.0.0/10   # LAN + tailnet
-    logging:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=openvpn
+      - OPENVPN_CUSTOM_CONFIG=/gluetun/custom/default.ovpn
+      - TZ=Europe/Berlin
+    logging: &logging
       driver: json-file
       options:
         max-size: 10m
-    ports:
-      - '127.0.0.1:9091:9091'   # tailnet: tailscale serve --https=9091
+    ports:   # localhost only; tailnet: tailscale serve --https=<port> http://127.0.0.1:<port>
+      - '127.0.0.1:8080:8080'   # qBittorrent
+      - '127.0.0.1:9696:9696'   # Prowlarr
+      - '127.0.0.1:3333:3333'   # bitmagnet (profile)
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    network_mode: service:gluetun
+    depends_on:
+      check-download-dir:
+        condition: service_completed_successfully
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - ./config/qbittorrent:/config
+      - ${DOWNLOAD_DIR:-/Volumes/T7/qbittorrent}:/downloads
+    environment:
+      - TZ=Europe/Berlin
+      - WEBUI_PORT=8080
+    logging: *logging
+
+  prowlarr:   # search UI: queries indexers, sends results to qBittorrent (localhost:8080)
+    image: lscr.io/linuxserver/prowlarr:latest
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - ./config/prowlarr:/config
+    environment:
+      - TZ=Europe/Berlin
+    logging: *logging
+
+  flaresolverr:   # in Prowlarr: Settings → Indexers → add FlareSolverr, host http://localhost:8191
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    profiles: [cloudflare]
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      - TZ=Europe/Berlin
+    logging: *logging
+
+  bitmagnet:   # own DHT index; add to Prowlarr as Generic Torznab, URL http://localhost:3333/torznab
+    image: ghcr.io/bitmagnet-io/bitmagnet:latest
+    profiles: [bitmagnet]
+    network_mode: service:gluetun
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - POSTGRES_HOST=localhost
+      - POSTGRES_PASSWORD=postgres
+    command:
+      - worker
+      - run
+      - --keys=http_server
+      - --keys=queue_server
+      - --keys=dht_crawler
+    logging: *logging
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [bitmagnet]
+    network_mode: service:gluetun   # reachable as localhost from bitmagnet
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - ./config/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=bitmagnet
+      - PGUSER=postgres
+    healthcheck:
+      test: [CMD-SHELL, pg_isready]
+      interval: 10s
+      start_period: 20s
+    logging: *logging

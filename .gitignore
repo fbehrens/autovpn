@@ -7,3 +7,4 @@ regions
 .DS_Store
 .vscode
 *.bak
+config/

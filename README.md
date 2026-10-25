@@ -1,6 +1,12 @@
 # autovpn
 
-Spin up an on-demand OpenVPN endpoint on EC2 (~1 min) and run Transmission through it in Docker.
+Spin up an on-demand OpenVPN endpoint on EC2 (~1 min) and run a torrent stack through it in Docker:
+
+* **gluetun** – VPN client + firewall kill switch; all other containers share its network,
+  so nothing (downloads, searches, DNS) can leave except through the EC2 tunnel
+* **qBittorrent** – torrent client, <http://localhost:8080>
+* **Prowlarr** – search UI across public indexers, sends results to qBittorrent, <http://localhost:9696>
+* optional **FlareSolverr** (profile `cloudflare`) and **bitmagnet** (profile `bitmagnet`, own DHT index)
 
 ## Requirements
 
@@ -25,7 +31,7 @@ A typical download session:
    ./autovpn -C -r eu-north-1
    ```
 
-2. **Start Transmission** – it connects through the endpoint from step 1:
+2. **Start the stack** – gluetun connects to the endpoint from step 1, the rest starts once the tunnel is healthy:
 
    ```fish
    docker compose up -d
@@ -34,14 +40,12 @@ A typical download session:
 3. **Check that traffic leaves via EC2** – this must print the EC2 IP, not your home IP:
 
    ```fish
-   docker compose exec transmission curl -s ifconfig.me
+   docker compose exec qbittorrent curl -s ifconfig.me
    ```
 
-4. **Download** – open <http://localhost:9091>, add a `.torrent` file or magnet link.
-   Finished files land in `/Volumes/T7/transmission/completed`.
-
-   The port is bound to localhost only; to reach it from the tailnet:
-   `tailscale serve --bg --https=9091 http://127.0.0.1:9091`
+4. **Search** – open <http://localhost:9696>, *Search*, then the download icon on a result sends it
+   to qBittorrent. Or add a `.torrent`/magnet directly at <http://localhost:8080>.
+   Finished files land in `/Volumes/T7/qbittorrent/completed`.
 
 5. **Clean up** – EC2 bills per hour, so terminate when done:
 
@@ -55,25 +59,60 @@ endpoints run `docker compose restart`, then repeat step 3.
 
 Credentials and `*.pem` files are secrets: never commit them (see [Moving to another Mac](#moving-to-another-mac)).
 
+## Setup notes
+
+App settings live in `./config/` (gitignored). On a fresh `config/`:
+
+* **qBittorrent** – login `admin`, temporary password from `docker compose logs qbittorrent | grep password`;
+  set your own under *Tools → Options → WebUI*. Recommended (EC2 egress costs ~$0.09/GB, so don't seed much):
+  * *Downloads*: default save path `/downloads/completed`, incomplete `/downloads/incomplete`
+  * *BitTorrent*: stop seeding at ratio 0.1; *Speed*: upload limit 1 MB/s
+  * *WebUI*: *Bypass authentication for clients on localhost* – lets Prowlarr connect without
+    a password (it shares gluetun's network); the host and tailnet still need to log in
+* **Prowlarr** – *Settings → Download Clients → qBittorrent*, host `localhost`, port `8080`.
+  *Indexers → Add*: pick public ones and keep those whose test passes. Many sites
+  (e.g. The Pirate Bay) block AWS IPs via Cloudflare; FlareSolverr helps for some
+  (`docker compose --profile cloudflare up -d`, then *Settings → Indexers → FlareSolverr*,
+  host `http://localhost:8191/`, tag it and give the indexer the same tag).
+
+All UIs are bound to localhost; to reach them from the tailnet:
+
+```fish
+tailscale serve --bg --https=8080 http://127.0.0.1:8080   # qBittorrent
+tailscale serve --bg --https=9696 http://127.0.0.1:9696   # Prowlarr
+```
+
+### bitmagnet (optional)
+
+Own search index built by crawling the BitTorrent DHT, no third-party sites involved:
+
+```fish
+docker compose --profile bitmagnet up -d   # UI http://localhost:3333
+```
+
+In Prowlarr add it as *Generic Torznab*, URL `http://localhost:3333/torznab`.
+It needs to run for days to build a useful index and its crawl traffic goes through EC2
+(egress costs), so stop it with `docker compose --profile bitmagnet stop bitmagnet postgres`.
+
 ## Usage
 
 ```fish
 ./autovpn -C -r us-east-1          # create endpoint (keypair us-east-1_vpnkey.pem auto-created)
-docker compose up -d               # transmission via VPN -> http://localhost:9091
+docker compose up -d               # stack via VPN -> Prowlarr :9696, qBittorrent :8080
 ./autovpn -S -r us-east-1          # list running endpoints
 ./autovpn -T -r us-east-1 -z all   # terminate when done (stop paying)
 docker compose down
 ```
 
-`-C` writes `<region>_aws_vpn.ovpn` and `custom/default.ovpn` (used by docker compose).
-Downloads go to `/Volumes/T7/transmission`; startup aborts if T7 is not mounted.
+`-C` writes `<region>_aws_vpn.ovpn` and `custom/default.ovpn` (used by gluetun).
+Downloads go to `/Volumes/T7/qbittorrent`; startup aborts if T7 is not mounted.
 Override with `DOWNLOAD_DIR=/path docker compose up -d`.
 OrbStack needs *Removable Volumes* access (System Settings → Privacy & Security → Files & Folders).
 
-Verify the container uses the EC2 IP:
+Verify the exit IP (gluetun also logs it):
 
 ```fish
-docker compose exec transmission curl -s ifconfig.me
+docker compose logs gluetun | grep "Public IP"
 ```
 
 ## Options

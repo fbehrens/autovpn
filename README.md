@@ -77,6 +77,25 @@ App settings live in `./config/` (gitignored). On a fresh `config/`:
   (*Settings → Indexers → FlareSolverr*,
   host `http://localhost:8191/`, tag it and give the indexer the same tag).
 
+### Public indexers
+
+Some public indexers to try in Prowlarr (*Indexers → Add*, search by name). Availability
+from AWS IPs changes, so keep whatever passes *Test*:
+
+| Indexer          | Content                         | Notes                                   |
+|------------------|---------------------------------|-----------------------------------------|
+| YTS              | movies (small x264/x265 files)  | works from EC2                          |
+| EZTV             | TV shows                        |                                         |
+| Nyaa             | anime, Asian media              |                                         |
+| 1337x            | general                         | Cloudflare, needs FlareSolverr          |
+| The Pirate Bay   | general                         | often blocks AWS IPs                    |
+| LimeTorrents     | general                         |                                         |
+| Knaben           | meta-search over many trackers  | good single-indexer fallback            |
+| BitSearch        | general, DHT-based              |                                         |
+| Internet Archive | public domain, legal            |                                         |
+
+[bitmagnet](#bitmagnet-optional) is a self-hosted alternative that doesn't depend on any site.
+
 ### Access from the tailnet
 
 All UIs are bound to localhost. `tailscale serve` makes them reachable from your other

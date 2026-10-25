@@ -69,6 +69,8 @@ App settings live in `./config/` (gitignored). On a fresh `config/`:
   * *BitTorrent*: stop seeding at ratio 0.1; *Speed*: upload limit 1 MB/s
   * *WebUI*: *Bypass authentication for clients on localhost* – lets Prowlarr connect without
     a password (it shares gluetun's network); the host and tailnet still need to log in
+  * *WebUI*: *Bypass authentication for clients in whitelisted IP subnets* `0.0.0.0/0, ::/0` –
+    no login at all (OK because the port is bound to localhost, reachable only via `tailscale serve`)
 * **Prowlarr** – *Settings → Download Clients → qBittorrent*, host `localhost`, port `8080`.
   *Indexers → Add*: pick public ones and keep those whose test passes. Many sites
   (e.g. The Pirate Bay) block AWS IPs via Cloudflare; FlareSolverr helps for some

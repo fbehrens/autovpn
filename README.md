@@ -75,12 +75,27 @@ App settings live in `./config/` (gitignored). On a fresh `config/`:
   (`docker compose --profile cloudflare up -d`, then *Settings → Indexers → FlareSolverr*,
   host `http://localhost:8191/`, tag it and give the indexer the same tag).
 
-All UIs are bound to localhost; to reach them from the tailnet:
+### Access from the tailnet
+
+All UIs are bound to localhost. `tailscale serve` makes them reachable from your other
+tailnet devices. The Tailscale daemon on this Mac listens on the tailnet IP, terminates HTTPS
+with an automatic Let's Encrypt cert for the MagicDNS name, and proxies to the local port.
+Nothing is exposed to the internet (that would be `tailscale funnel`). `--bg` keeps the config
+across reboots. Run once:
 
 ```fish
 tailscale serve --bg --https=8080 http://127.0.0.1:8080   # qBittorrent
 tailscale serve --bg --https=9696 http://127.0.0.1:9696   # Prowlarr
+tailscale serve status                                    # list mappings
+tailscale serve --https=8080 off                          # remove one
 ```
+
+The URLs are `https://<host>.<tailnet>.ts.net:<port>`. On wien:
+
+* Prowlarr (search): <https://wien.kite-ling.ts.net:9696>
+* qBittorrent: <https://wien.kite-ling.ts.net:8080>
+
+This needs MagicDNS and HTTPS certificates enabled in the Tailscale admin console (*DNS* page).
 
 ### bitmagnet (optional)
 

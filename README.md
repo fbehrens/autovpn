@@ -6,7 +6,7 @@ Spin up an on-demand OpenVPN endpoint on EC2 (~1 min) and run a torrent stack th
   so nothing (downloads, searches, DNS) can leave except through the EC2 tunnel
 * **qBittorrent** – torrent client, <http://localhost:8080>
 * **Prowlarr** – search UI across public indexers, sends results to qBittorrent, <http://localhost:9696>
-* optional **FlareSolverr** (profile `cloudflare`) and **bitmagnet** (profile `bitmagnet`, own DHT index)
+* **FlareSolverr** (for indexers behind Cloudflare) and optional **bitmagnet** (profile `bitmagnet`, own DHT index)
 
 ## Requirements
 
@@ -74,7 +74,7 @@ App settings live in `./config/` (gitignored). On a fresh `config/`:
 * **Prowlarr** – *Settings → Download Clients → qBittorrent*, host `localhost`, port `8080`.
   *Indexers → Add*: pick public ones and keep those whose test passes. Many sites
   (e.g. The Pirate Bay) block AWS IPs via Cloudflare; FlareSolverr helps for some
-  (`docker compose --profile cloudflare up -d`, then *Settings → Indexers → FlareSolverr*,
+  (*Settings → Indexers → FlareSolverr*,
   host `http://localhost:8191/`, tag it and give the indexer the same tag).
 
 ### Access from the tailnet

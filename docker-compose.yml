@@ -1,11 +1,10 @@
 # Torrent stack tunneled through the autovpn endpoint.
-#   docker compose up -d     -> qBittorrent http://localhost:8080, Prowlarr http://localhost:9696
+#   docker compose up -d     -> qBittorrent http://localhost:8080, Prowlarr http://localhost:9696, FlareSolverr :8191
 # gluetun owns the VPN + firewall kill switch; every other service shares its network
 # (network_mode: service:gluetun), so all traffic, including searches, leaves via EC2.
 # Downloads go to /Volumes/T7/qbittorrent (T7 must be mounted).
 # Override download dir with DOWNLOAD_DIR=/path (or put it in .env)
 # Optional profiles:
-#   docker compose --profile cloudflare up -d   + FlareSolverr (for indexers behind Cloudflare)
 #   docker compose --profile bitmagnet up -d    + bitmagnet DHT crawler/index http://localhost:3333
 services:
   check-download-dir:   # refuse to start if T7 is not mounted (else docker writes to the boot disk)
@@ -77,7 +76,6 @@ services:
 
   flaresolverr:   # in Prowlarr: Settings → Indexers → add FlareSolverr, host http://localhost:8191
     image: ghcr.io/flaresolverr/flaresolverr:latest
-    profiles: [cloudflare]
     network_mode: service:gluetun
     depends_on:
       gluetun:

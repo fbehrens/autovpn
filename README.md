@@ -8,6 +8,24 @@ Spin up an on-demand OpenVPN endpoint on EC2 (~1 min) and run a torrent stack th
 * **Prowlarr** – search UI across public indexers, sends results to qBittorrent, <http://localhost:9696>
 * optional **FlareSolverr** (profile `cloudflare`) and **bitmagnet** (profile `bitmagnet`, own DHT index)
 
+```
+ browser (Mac or tailnet)                      Mac mini (OrbStack)
+ ────────────────────────                      ──────────────────────────────────────────────────
+ https://wien.<tailnet>:9696 ─ tailscale serve ─► 127.0.0.1:9696 ┐
+ https://wien.<tailnet>:8080 ─ tailscale serve ─► 127.0.0.1:8080 ┤
+                                                                 ▼
+                         ┌──────────── gluetun (one shared network, kill switch) ───────────┐
+                         │  Prowlarr :9696 ──"download"──► qBittorrent :8080 ──► /Volumes/T7 │
+                         └───────────────────────────────┬──────────────────────────────────┘
+                                                         │ OpenVPN (custom/default.ovpn)
+                                                         ▼
+                                       EC2 endpoint (./autovpn -C) ──► indexers, peers
+```
+
+Your home IP is never seen by indexer sites or torrent peers – only the EC2 IP. If the tunnel
+drops, gluetun's firewall blocks all traffic instead of falling back to your home connection.
+The EC2 endpoint is disposable: create it for a session, terminate it afterwards.
+
 ## Requirements
 
 * [uv](https://docs.astral.sh/uv/) (`brew install uv`) – dependencies (boto3) are installed automatically
@@ -43,11 +61,17 @@ A typical download session:
    docker compose exec qbittorrent curl -s ifconfig.me
    ```
 
-4. **Search** – open <http://localhost:9696>, *Search*, then the download icon on a result sends it
-   to qBittorrent. Or add a `.torrent`/magnet directly at <http://localhost:8080>.
-   Finished files land in `/Volumes/T7/qbittorrent/completed`.
+4. **Search** – open Prowlarr (<http://localhost:9696>, or `https://wien.<tailnet>:9696`), *Search*,
+   type a query; sort by *Peers* (more seeders = faster, and fakes rarely have many).
+   The download icon on a result sends it to qBittorrent. Or add a `.torrent`/magnet directly
+   in qBittorrent (<http://localhost:8080>).
 
-5. **Clean up** – EC2 bills per hour, so terminate when done:
+5. **Watch / collect** – progress in qBittorrent. Finished files land in
+   `/Volumes/T7/qbittorrent/completed`; torrents stop seeding at ratio 0.1 by themselves.
+   Never run executables from there (`.exe`, `.scr`, `.lnk`, `.app`, password-protected archives);
+   a "movie" that is not a video file is malware.
+
+6. **Clean up** – EC2 bills per hour, so terminate when done:
 
    ```fish
    docker compose down
@@ -69,17 +93,36 @@ App settings live in `./config/` (gitignored). On a fresh `config/`:
   * *BitTorrent*: stop seeding at ratio 0.1; *Speed*: upload limit 1 MB/s
   * *WebUI*: *Bypass authentication for clients on localhost* – lets Prowlarr connect without
     a password (it shares gluetun's network); the host and tailnet still need to log in
-* **Prowlarr** – *Settings → Download Clients → qBittorrent*, host `localhost`, port `8080`.
+* **Prowlarr** – on first open it shows an *Authentication Required* form (see below).
+  Then *Settings → Download Clients → qBittorrent*, host `localhost`, port `8080`.
   *Indexers → Add*: pick public ones and keep those whose test passes. Many sites
   (e.g. The Pirate Bay) block AWS IPs via Cloudflare; FlareSolverr helps for some
   (`docker compose --profile cloudflare up -d`, then *Settings → Indexers → FlareSolverr*,
   host `http://localhost:8191/`, tag it and give the indexer the same tag).
+
+### Prowlarr *Authentication Required* form
+
+Prowlarr refuses to run without a login. Fill it in once:
+
+| Field | Value | Why |
+|---|---|---|
+| Authentication Method | *Forms (Login Page)* | normal login page with logout; *Basic* is a browser popup |
+| Authentication Required | **Enabled** | *Disabled for Local Addresses* would skip the login for every private IP – requests via the docker port (incl. everything from the tailnet) arrive from the docker gateway, a private IP, so that means *no password at all* |
+| Username / Password / Confirmation | your choice | stored hashed in `config/prowlarr/config.xml` |
+| Allowed Hosts | leave **empty** | empty = any `Host` header; listing names is DNS-rebinding protection, but a missing entry (`localhost`, `wien.<tailnet>.ts.net`) locks you out |
+
+*Save*, then log in. Forgot the password: stop the stack, in `config/prowlarr/config.xml` set
+`<AuthenticationMethod>None</AuthenticationMethod>`, start again and set a new one.
+Prowlarr's API key (*Settings → General*) is separate and keeps working for scripts.
+
+### Tailnet access
 
 All UIs are bound to localhost; to reach them from the tailnet:
 
 ```fish
 tailscale serve --bg --https=8080 http://127.0.0.1:8080   # qBittorrent
 tailscale serve --bg --https=9696 http://127.0.0.1:9696   # Prowlarr
+tailscale serve --https=9091 off                          # old Transmission entry, if still there
 ```
 
 ### bitmagnet (optional)
